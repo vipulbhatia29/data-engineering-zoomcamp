@@ -1,72 +1,55 @@
 #!/usr/bin/env python
 # coding: utf-8
-
-import os
-import argparse
-
-from time import time
-
 import pandas as pd
 from sqlalchemy import create_engine
-
+import argparse
+import os
 
 def main(params):
-    user = params.user
-    password = params.password
-    host = params.host 
-    port = params.port 
-    db = params.db
-    table_name = params.table_name
-    url = params.url
-    csv_name = 'output.csv'
-
-    os.system(f"wget {url} -O {csv_name}")
-
-    engine = create_engine(f'postgresql://{user}:{password}@{host}:{port}/{db}')
-
-    df_iter = pd.read_csv(csv_name, iterator=True, chunksize=100000)
-
-    df = next(df_iter)
-
-    df.tpep_pickup_datetime = pd.to_datetime(df.tpep_pickup_datetime)
-    df.tpep_dropoff_datetime = pd.to_datetime(df.tpep_dropoff_datetime)
-
-    df.head(n=0).to_sql(name=table_name, con=engine, if_exists='replace')
-
-    df.to_sql(name=table_name, con=engine, if_exists='append')
+    user=params.user
+    password=params.password
+    host=params.host
+    port=params.port
+    db=params.db
+    table=params.table
+    table2=params.table2
+    parquetURL=params.parquetURL
+    csvURL=params.csvURL
+    parquetfile='output.parquet'
+    csvfile='output.csv'
 
 
-    while True: 
+    os.system(f"wget {parquetURL} -O {parquetfile}")
+    os.system(f"wget {csvURL} -O {csvfile}")
+    df=pd.read_parquet(parquetfile)
+    df1=pd.read_csv(csvfile)
+    #df_iter=pd.read_parquet("yellow_tripdata_2021-01.parquet",iterator=True,chunksize=100000)
+    """df['tpep_pickup_datetime']=pd.to_datetime(df['tpep_pickup_datetime'])
+    df['tpep_dropoff_datetime']=pd.to_datetime(df['tpep_dropoff_datetime'])"""
+    engine=create_engine(f"postgresql://{user}:{password}@{host}:{port}/{db}")
+    engine.connect()
+    #print(pd.io.sql.get_schema(df,name=table,con=engine))
+    # create empty table
+    print("we are there")
+    #print(df.head())
+    df.head(n=0).to_sql(name=table,con=engine,if_exists='replace')
+    df1.head(n=0).to_sql(name=table2,con=engine,if_exists='replace')
+    # create empty table
+    print("we are here")
+    print(df.to_sql(name=table,con=engine,if_exists='append',chunksize=10000))
+    print(df1.to_sql(name=table2,con=engine,if_exists='append',chunksize=10000))
 
-        try:
-            t_start = time()
-            
-            df = next(df_iter)
 
-            df.tpep_pickup_datetime = pd.to_datetime(df.tpep_pickup_datetime)
-            df.tpep_dropoff_datetime = pd.to_datetime(df.tpep_dropoff_datetime)
-
-            df.to_sql(name=table_name, con=engine, if_exists='append')
-
-            t_end = time()
-
-            print('inserted another chunk, took %.3f second' % (t_end - t_start))
-
-        except StopIteration:
-            print("Finished ingesting data into the postgres database")
-            break
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Ingest CSV data to Postgres')
-
-    parser.add_argument('--user', required=True, help='user name for postgres')
-    parser.add_argument('--password', required=True, help='password for postgres')
-    parser.add_argument('--host', required=True, help='host for postgres')
-    parser.add_argument('--port', required=True, help='port for postgres')
-    parser.add_argument('--db', required=True, help='database name for postgres')
-    parser.add_argument('--table_name', required=True, help='name of the table where we will write the results to')
-    parser.add_argument('--url', required=True, help='url of the csv file')
-
+if __name__=='__main__':
+    parser = argparse.ArgumentParser(description='Ingest Taxi data from parquet into postgres')
+    parser.add_argument('--user',help='username for postgres')
+    parser.add_argument('--password',help='password for postgres')
+    parser.add_argument('--host',help='hostname for postgres')
+    parser.add_argument('--port',help='port # for postgres')
+    parser.add_argument('--db',help='db name for postgres')
+    parser.add_argument('--table',help='table name for postgres')
+    parser.add_argument('--parquetURL',help='url for the parquet file to ingest')
+    parser.add_argument('--csvURL',help='url for the csv file to ingest')
+    parser.add_argument('--table2',help='table name for the taxi zones lookup')
     args = parser.parse_args()
-
     main(args)
